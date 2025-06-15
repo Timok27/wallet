@@ -1,3 +1,4 @@
+go-hdwallet – Генерация мнемоники, HD-деривация (BIP-39/-32/-44). 
 ```go
 package main
 
@@ -69,4 +70,36 @@ func main() {
 		fmt.Println("Private Key (hex):", hex.EncodeToString(crypto.FromECDSA(privKey)))
 	}
 }
+```
+
+Структура BIP-44 выглядит следующим образом: m / 44' / 195' / account' / change / address_index
+Разделение ролей происходит через account
+
+API методы для каждой роли: 
+```go
+// Получить адрес для роли и индекса
+func GetAddress(role string, index int) (string, error) {
+    var account uint32
+    switch role {
+        case "trader": account = 0
+        case "admin":  account = 1
+        case "merch":  account = 2
+        default: return "", errors.New("unknown role")
+    }
+    path := fmt.Sprintf("m/44'/195'/%d'/0/%d", account, index)
+    // деривация, преобразование в адрес...
+}
+
+// Создать заявку на вывод (мерч)
+func CreateWithdrawRequest(merchID string, amount int64, toAddress string) error {
+    // сохранить в БД с статусом "created"
+}
+
+// Подтвердить и отправить вывод (админ)
+func ApproveAndSendWithdraw(requestID string) error {
+    // получить данные заявки, деривировать приватный ключ админа
+    // сформировать и подписать транзакцию через gotron-sdk
+    // отправить в сеть, обновить статус заявки
+}
+
 ```
