@@ -1,4 +1,20 @@
 go-hdwallet – Генерация мнемоники, HD-деривация (BIP-39/-32/-44). 
+методы:
+
+Создаёт случайную энтропию
+```go
+func NewEntropy(bits int) ([]byte, error)
+```
+Создаёт мнемонику на основе сгенерированной энтропии
+```go
+func NewMnemonic(bits int) (string, error)
+```
+Генерирует мнемонику из  переданной энтропии.
+```go
+func NewMnemonicFromEntropy(entropy []byte) (string, error)
+```
+
+Пример реализации:
 ```go
 package main
 
@@ -36,7 +52,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Mnemonic:", mnemonic)
 
 	wallet, err := hdwallet.NewFromMnemonic(mnemonic)
 	if err != nil {
@@ -66,16 +81,17 @@ func main() {
 	}
 }
 ```
-для проверки созданных адресов 
+для проверки созданных адресов и мненмоники
 ```go
-
+		fmt.Println("Mnemonic:", mnemonic)
 		fmt.Printf("\nAddress #%d\n", i)
 		fmt.Println("Derivation Path:", derivationPath)
 		fmt.Println("TRON Address:", tronAddr)
 		fmt.Println("Private Key (hex):", hex.EncodeToString(crypto.FromECDSA(privKey)))
 ```
 
-Структура BIP-44 выглядит следующим образом: m / 44' / 195' / account' / change / address_index
+Структура BIP-44 выглядит следующим образом: 
+m/44'/195'/account'/change/address_index
 Разделение ролей происходит через account
 
 API методы для каждой роли: 
