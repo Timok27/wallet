@@ -15,7 +15,7 @@ func NewMnemonic(bits int) (string, error)
 func NewMnemonicFromEntropy(entropy []byte) (string, error)
 ```
 
-Пример реализации:
+Пример реализации (добавил функцию преобразования ключа, тк go-hdwallet генерирует адреса для ETH):
 ```go
 package main
 
