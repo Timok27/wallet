@@ -1,4 +1,5 @@
 go-hdwallet – Генерация мнемоники, HD-деривация (BIP-39/-32/-44). 
+
 методы:
 
 Создаёт случайную энтропию
@@ -89,6 +90,59 @@ func main() {
 		fmt.Println("TRON Address:", tronAddr)
 		fmt.Println("Private Key (hex):", hex.EncodeToString(crypto.FromECDSA(privKey)))
 ```
+gotron-sdk – Взаимодействие с TRON-сетью: создание и подписание TX. 
+
+Подключение к TRON FullNode
+```go
+tronClient := client.NewGrpcClient("узел от Tron")
+err := tronClient.Start()
+if err != nil {
+	log.Fatal(err)
+}
+defer tronClient.Stop()
+```
+Получение информации о счёте
+```go
+account, err := tronClient.GetAccount("Tron адрес кошелька")
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println("Balance:", account.Balance) // в SUN 
+```
+Создание и подписание транзакции (TRX transfer)
+```go
+// Создание транзакции
+tx, err := tronClient.Transfer("адрес отправителя", "адрес получателя", 100_000) // 100_000 SUN = 0.1 TRX
+if err != nil {
+	log.Fatal(err)
+}
+
+// Подпись приватным ключом (hex string)
+signedTx, err := tronClient.SignTransaction(tx, "приватный ключ в HEX")
+if err != nil {
+	log.Fatal(err)
+}
+
+// Отправка транзакции
+result, err := tronClient.Broadcast(signedTx)
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println("Success:", result.Result)
+fmt.Println("TXID:", tx.Txid)
+
+```
+Информация о транзакцции
+```go
+txInfo, err := tronClient.GetTransactionByID("TX_ID_HEX")
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Printf("Transaction: %+v\n", txInfo)
+
+```
+
 
 Структура BIP-44 выглядит следующим образом: 
 m/44'/195'/account'/change/address_index
