@@ -63,13 +63,16 @@ func main() {
 
 		pubKey := crypto.FromECDSAPub(&privKey.PublicKey)
 		tronAddr := publicKeyToTronAddress(pubKey)
+	}
+}
+```
+для проверки созданных адресов 
+```go
 
 		fmt.Printf("\nAddress #%d\n", i)
 		fmt.Println("Derivation Path:", derivationPath)
 		fmt.Println("TRON Address:", tronAddr)
 		fmt.Println("Private Key (hex):", hex.EncodeToString(crypto.FromECDSA(privKey)))
-	}
-}
 ```
 
 Структура BIP-44 выглядит следующим образом: m / 44' / 195' / account' / change / address_index
