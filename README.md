@@ -1,3 +1,4 @@
+```go
 package main
 
 import (
@@ -68,3 +69,4 @@ func main() {
 		fmt.Println("Private Key (hex):", hex.EncodeToString(crypto.FromECDSA(privKey)))
 	}
 }
+```
