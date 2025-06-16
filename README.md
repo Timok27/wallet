@@ -10,9 +10,9 @@ func NewEntropy(bits int) ([]byte, error)
 ```go
 func NewMnemonic(bits int) (string, error)
 ```
-Генерирует мнемонику из  переданной энтропии.
+NewFromMnemonic returns a new wallet from a BIP-39 mnemonic.
 ```go
-func NewMnemonicFromEntropy(entropy []byte) (string, error)
+func NewFromMnemonic(mnemonic string, passOpt ...string) (*Wallet, error)
 ```
 
 Пример реализации (добавил функцию преобразования ключа, тк go-hdwallet генерирует адреса для ETH):
