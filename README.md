@@ -150,7 +150,7 @@ m/44'/195'/account'/change/address_index
 
 API методы для каждой роли: 
 ```go
-func GetAddress(role string, index int) (string, error) {
+func DeriveTronAddress(wallet *hdwallet.Wallet, role string, index int) (string, string, error) {
 	var account uint32
 	switch role {
 	case "trader":
@@ -160,19 +160,25 @@ func GetAddress(role string, index int) (string, error) {
 	case "merch":
 		account = 2
 	default:
-		return "", fmt.Errorf("unknown role: %s", role)
+		return "", "", fmt.Errorf("unknown role: %s", role)
 	}
 
+	// BIP-44 path
 	path := fmt.Sprintf("m/44'/195'/%d'/0/%d", account, index)
 	derivationPath := hdwallet.MustParseDerivationPath(path)
 	accountWallet, err := wallet.Derive(derivationPath, false)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	pubKey := crypto.FromECDSAPub(&wallet.PrivateKey(accountWallet).PublicKey)
-	return publicKeyToTronAddress(pubKey), nil
+	privKey, _ := wallet.PrivateKey(accountWallet)
+	pubKey := crypto.FromECDSAPub(&privKey.PublicKey)
+	tronAddr := publicKeyToTronAddress(pubKey)
+	privKeyHex := hex.EncodeToString(crypto.FromECDSA(privKey))
+
+	return tronAddr, privKeyHex, nil
 }
+
 ```
 Trader
 Использует адреса m/44'/195'/0'/0/i
@@ -284,4 +290,66 @@ func ApproveAndSendWithdraw(requestID string) error {
 	return nil
 }
 
+```
+
+
+
+Проверка баланса в SUN (1 TRX = 1 000 000 SUN) 
+```go
+func GetBalance(address string) (int64, error) {
+	account, err := tronClient.GetAccount(address)
+	if err != nil {
+		return 0, err
+	}
+	return account.Balance, nil
+}
+```
+TRON использует bandwidth, который начисляется бесплатно каждый день. (~1500 байт)
+Одна TRX-транзакция — ~250 байт.
+Если адрес превысил лимит bandwidth — TRON списывает TRX с баланса
+
+
+Оценка минимального баланса
+```go
+const MIN_TRX_FOR_TRANSFER = 100_000 // в SUN = 0.1 TRX
+
+func HasEnoughForTransfer(address string) (bool, error) {
+	balance, err := GetBalance(address)
+	if err != nil {
+		return false, err
+	}
+	return balance >= MIN_TRX_FOR_TRANSFER, nil
+}
+```
+
+Перевод TRX
+```go
+func SendTRX(fromPrivKey, toAddr string, amount int64) (string, error) {
+	fromAddr, err := AddressFromPrivKey(fromPrivKey)
+	if err != nil {
+		return "", err
+	}
+
+	// Проверка на покрытие комиссии
+	err = EnsureFeeCoverage(fromAddr, MASTER_PRIVATE_KEY)
+	if err != nil {
+		return "", fmt.Errorf("insufficient TRX for fee: %v", err)
+	}
+
+	// Создание и подписание
+	tx, err := tronClient.Transfer(fromAddr, toAddr, amount)
+	if err != nil {
+		return "", err
+	}
+	signedTx, err := tronClient.SignTransaction(tx, fromPrivKey)
+	if err != nil {
+		return "", err
+	}
+	result, err := tronClient.Broadcast(signedTx)
+	if err != nil || !result.Result {
+		return "", fmt.Errorf("broadcast failed")
+	}
+
+	return tx.Txid, nil
+}
 ```
