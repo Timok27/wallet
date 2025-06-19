@@ -309,19 +309,29 @@ TRON использует bandwidth, который начисляется бе�
 Если адрес превысил лимит bandwidth — TRON списывает TRX с баланса
 
 
-Оценка минимального баланса
+Проверяет, есть ли достаточный баланс (TRX) для покрытия комиссий
 ```go
-const MIN_TRX_FOR_TRANSFER = 100_000 // в SUN = 0.1 TRX
+func EnsureFeeCoverage(addr string, masterPrivKey string) error {
+	const MIN_BALANCE = 200_000 // 0.2 TRX как запас
 
-func HasEnoughForTransfer(address string) (bool, error) {
-	balance, err := GetBalance(address)
+	balance, err := GetBalance(addr)
 	if err != nil {
-		return false, err
+		return err
 	}
-	return balance >= MIN_TRX_FOR_TRANSFER, nil
+	if balance >= MIN_BALANCE {
+		return nil
+	}
 }
 ```
 
+	Пополняем с мастер-кошелька
+	txid, err := SendTRX(masterPrivKey, addr, MIN_BALANCE)
+	if err != nil {
+		return fmt.Errorf("failed to fund address for fees: %w", err)
+	}
+	log.Printf("Address %s funded with TRX for fees, txid: %s", addr, txid)
+	return nil
+ 
 Перевод TRX
 ```go
 func SendTRX(fromPrivKey, toAddr string, amount int64) (string, error) {
