@@ -90,6 +90,70 @@ func main() {
 		fmt.Println("TRON Address:", tronAddr)
 		fmt.Println("Private Key (hex):", hex.EncodeToString(crypto.FromECDSA(privKey)))
 ```
+
+Функции для создания кошелька, получения адреса и приватного ключа
+```go
+type Role string
+
+const (
+	RoleTrader Role = "trader"
+	RoleAdmin  Role = "admin"
+	RoleMerch  Role = "merch"
+)
+
+var roleAccounts = map[Role]uint32{
+	RoleTrader: 0,
+	RoleAdmin:  1,
+	RoleMerch:  2,
+}
+
+type WalletInfo struct {
+	Mnemonic string
+	Wallet   *hdwallet.Wallet
+}
+
+// Создаёт новую мнемонику и HD-кошелёк
+func CreateHDWallet() (*WalletInfo, error) {
+	entropy, err := bip39.NewEntropy(256)
+	if err != nil {
+		return nil, err
+	}
+	mnemonic, err := bip39.NewMnemonic(entropy)
+	if err != nil {
+		return nil, err
+	}
+	wallet, err := hdwallet.NewFromMnemonic(mnemonic)
+	if err != nil {
+		return nil, err
+	}
+	return &WalletInfo{Mnemonic: mnemonic, Wallet: wallet}, nil
+}
+
+// Возвращает Tron-адрес и приватный ключ по роли и индексу
+func DeriveTronAddress(wallet *hdwallet.Wallet, role Role, index int) (string, string, error) {
+	roleAccount, ok := roleAccounts[role]
+	if !ok {
+		return "", "", fmt.Errorf("unknown role: %s", role)
+	}
+
+	path := fmt.Sprintf("m/44'/195'/%d'/0/%d", roleAccount, index)
+	derivationPath := hdwallet.MustParseDerivationPath(path)
+
+	account, err := wallet.Derive(derivationPath, false)
+	if err != nil {
+		return "", "", err
+	}
+
+	privKey, _ := wallet.PrivateKey(account)
+	pubKey := crypto.FromECDSAPub(&privKey.PublicKey)
+	tronAddr := publicKeyToTronAddress(pubKey)
+	privKeyHex := hex.EncodeToString(crypto.FromECDSA(privKey))
+
+	return tronAddr, privKeyHex, nil
+}
+
+```
+
 gotron-sdk – Взаимодействие с TRON-сетью: создание и подписание TX. 
 
 Подключение к TRON FullNode
@@ -292,7 +356,17 @@ func ApproveAndSendWithdraw(requestID string) error {
 
 ```
 
-
+Первичное пополнение кошелька после генерации
+```go
+func FundNewWallet(targetAddress string, amount int64, masterPrivKey string) error {
+	txid, err := SendTRX(masterPrivKey, targetAddress, amount)
+	if err != nil {
+		return fmt.Errorf("failed to fund wallet: %v", err)
+	}
+	log.Printf("New wallet funded with %d SUN, txid: %s", amount, txid)
+	return nil
+}
+```
 
 Проверка баланса в SUN (1 TRX = 1 000 000 SUN) 
 ```go
@@ -324,14 +398,15 @@ func EnsureFeeCoverage(addr string, masterPrivKey string) error {
 }
 ```
 
-	Пополняем с мастер-кошелька
+Пополняем с мастер-кошелька
+```go
 	txid, err := SendTRX(masterPrivKey, addr, MIN_BALANCE)
 	if err != nil {
 		return fmt.Errorf("failed to fund address for fees: %w", err)
 	}
 	log.Printf("Address %s funded with TRX for fees, txid: %s", addr, txid)
 	return nil
- 
+ ```
 Перевод TRX
 ```go
 func SendTRX(fromPrivKey, toAddr string, amount int64) (string, error) {
