@@ -1,3 +1,13 @@
+Очередность действий 
+1. Создание энтропии (bip39.NewEntropy)
+2. Генерация мнемоники (bip39.NewMnemonic)
+3. Инициализация HDWallet (hdwallet.NewFromMnemonic)
+4. Деривация адресов по ролям (m/44'/195'/x'/0/i)
+5. Конвертация pubkey → TRON-адрес
+6. Первичное пополнение TRX (FundNewWallet)
+7. Проверка баланса, докидывание на комиссии (EnsureFeeCoverage)
+
+
 go-hdwallet – Генерация мнемоники, HD-деривация (BIP-39/-32/-44). 
 
 методы:
@@ -25,135 +35,85 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/btcsuite/btcutil/base58"
-	"github.com/ethereum/go-ethereum/crypto"
-	hdwallet "github.com/miguelmota/go-ethereum-hdwallet"
-	"github.com/tyler-smith/go-bip39"
+	"github.com/btcsuite/btcutil/base58"                  // Используется для base58-кодирования TRON-адреса
+	"github.com/ethereum/go-ethereum/crypto"              // Генерация ключей и получение публичного ключа
+	hdwallet "github.com/miguelmota/go-ethereum-hdwallet" // BIP-32/BIP-44 HD-кошелёк
+	"github.com/tyler-smith/go-bip39"                     // Генерация энтропии и мнемоники (BIP-39)
 )
 
-// Преобразование публичного ключа в TRON-адрес
+// Преобразование публичного ключа (ECDSA) в TRON-адрес (Base58Check)
 func publicKeyToTronAddress(pubkey []byte) string {
+	// Отрезаем первый байт (0x04), хэшируем Keccak256, берём последние 20 байт
 	ethAddress := crypto.Keccak256(pubkey[1:])[12:]
+
+	// Добавляем префикс TRON-сети (0x41 для Mainnet)
 	tronAddress := append([]byte{0x41}, ethAddress...)
+
+	// Дважды применяем SHA-256 для вычисления контрольной суммы (checksum)
 	hash1 := sha256.Sum256(tronAddress)
 	hash2 := sha256.Sum256(hash1[:])
 	checksum := hash2[:4]
+
+	// Добавляем контрольную сумму к адресу и кодируем в Base58Check
 	fullAddress := append(tronAddress, checksum...)
 	return base58.Encode(fullAddress)
 }
 
 func main() {
-	// Генерация мнемоники
+	// Шаг 1: Генерация 256-битной энтропии для создания мнемоники (24 слова)
 	entropy, err := bip39.NewEntropy(256)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Шаг 2: Генерация мнемонической фразы из энтропии (BIP-39)
 	mnemonic, err := bip39.NewMnemonic(entropy)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Шаг 3: Инициализация HD-кошелька на основе мнемоники (BIP-32)
 	wallet, err := hdwallet.NewFromMnemonic(mnemonic)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// Количество подкошельков
+	// Количество адресов, которые мы хотим сгенерировать
 	count := 5
 
 	for i := 0; i < count; i++ {
-		// Формируем путь деривации для i-го адреса
+		// Шаг 4: Формирование пути деривации (BIP-44: m/44'/195'/0'/0/i)
+		// 195 — coin_type для TRON
+		// account = 0 (по умолчанию), change = 0 (внешние адреса), index = i
 		derivationPath := fmt.Sprintf("m/44'/195'/0'/0/%d", i)
 		path := hdwallet.MustParseDerivationPath(derivationPath)
 
+		// Шаг 5: Деривация приватного ключа по пути
 		account, err := wallet.Derive(path, false)
 		if err != nil {
 			log.Fatalf("Failed to derive path %s: %v", derivationPath, err)
 		}
 
+		// Получение приватного ключа ECDSA
 		privKey, err := wallet.PrivateKey(account)
 		if err != nil {
 			log.Fatalf("Failed to get private key for path %s: %v", derivationPath, err)
 		}
 
+		// Получение публичного ключа и преобразование в TRON-адрес
 		pubKey := crypto.FromECDSAPub(&privKey.PublicKey)
 		tronAddr := publicKeyToTronAddress(pubKey)
-	}
-}
-```
-для проверки созданных адресов и мненмоники
-```go
-		fmt.Println("Mnemonic:", mnemonic)
-		fmt.Printf("\nAddress #%d\n", i)
+
+		// Вывод информации
+		fmt.Printf("Index %d:\n", i)
 		fmt.Println("Derivation Path:", derivationPath)
 		fmt.Println("TRON Address:", tronAddr)
-		fmt.Println("Private Key (hex):", hex.EncodeToString(crypto.FromECDSA(privKey)))
-```
-
-Функции для создания кошелька, получения адреса и приватного ключа
-```go
-type Role string
-
-const (
-	RoleTrader Role = "trader"
-	RoleAdmin  Role = "admin"
-	RoleMerch  Role = "merch"
-)
-
-var roleAccounts = map[Role]uint32{
-	RoleTrader: 0,
-	RoleAdmin:  1,
-	RoleMerch:  2,
-}
-
-type WalletInfo struct {
-	Mnemonic string
-	Wallet   *hdwallet.Wallet
-}
-
-// Создаёт новую мнемонику и HD-кошелёк
-func CreateHDWallet() (*WalletInfo, error) {
-	entropy, err := bip39.NewEntropy(256)
-	if err != nil {
-		return nil, err
+		fmt.Println("Private Key:", hex.EncodeToString(crypto.FromECDSA(privKey)))
+		fmt.Println()
 	}
-	mnemonic, err := bip39.NewMnemonic(entropy)
-	if err != nil {
-		return nil, err
-	}
-	wallet, err := hdwallet.NewFromMnemonic(mnemonic)
-	if err != nil {
-		return nil, err
-	}
-	return &WalletInfo{Mnemonic: mnemonic, Wallet: wallet}, nil
-}
-
-// Возвращает Tron-адрес и приватный ключ по роли и индексу
-func DeriveTronAddress(wallet *hdwallet.Wallet, role Role, index int) (string, string, error) {
-	roleAccount, ok := roleAccounts[role]
-	if !ok {
-		return "", "", fmt.Errorf("unknown role: %s", role)
-	}
-
-	path := fmt.Sprintf("m/44'/195'/%d'/0/%d", roleAccount, index)
-	derivationPath := hdwallet.MustParseDerivationPath(path)
-
-	account, err := wallet.Derive(derivationPath, false)
-	if err != nil {
-		return "", "", err
-	}
-
-	privKey, _ := wallet.PrivateKey(account)
-	pubKey := crypto.FromECDSAPub(&privKey.PublicKey)
-	tronAddr := publicKeyToTronAddress(pubKey)
-	privKeyHex := hex.EncodeToString(crypto.FromECDSA(privKey))
-
-	return tronAddr, privKeyHex, nil
 }
 
 ```
-
 gotron-sdk – Взаимодействие с TRON-сетью: создание и подписание TX. 
 
 Подключение к TRON FullNode
@@ -214,34 +174,51 @@ m/44'/195'/account'/change/address_index
 
 API методы для каждой роли: 
 ```go
+// DeriveTronAddress — возвращает TRON-адрес и приватный ключ по строковому имени роли и индексу
+// Использует BIP-44 деривацию с coin_type 195 (TRON)
 func DeriveTronAddress(wallet *hdwallet.Wallet, role string, index int) (string, string, error) {
 	var account uint32
+
+	// Определение номера аккаунта (account') по роли
 	switch role {
 	case "trader":
-		account = 0
+		account = 0 // m/44'/195'/0'/0/i
 	case "admin":
-		account = 1
+		account = 1 // m/44'/195'/1'/0/i
 	case "merch":
-		account = 2
+		account = 2 // m/44'/195'/2'/0/i
 	default:
-		return "", "", fmt.Errorf("unknown role: %s", role)
+		return "", "", fmt.Errorf("unknown role: %s", role) // Неизвестная роль
 	}
 
-	// BIP-44 path
+	// Формирование пути деривации согласно BIP-44: m / purpose' / coin_type' / account' / change / address_index
 	path := fmt.Sprintf("m/44'/195'/%d'/0/%d", account, index)
+
+	// Парсинг строки пути в структуру hdwallet.DerivationPath
 	derivationPath := hdwallet.MustParseDerivationPath(path)
+
+	// Деривация ключа по заданному пути
 	accountWallet, err := wallet.Derive(derivationPath, false)
 	if err != nil {
 		return "", "", err
 	}
 
+	// Извлечение приватного ключа (ECDSA)
 	privKey, _ := wallet.PrivateKey(accountWallet)
+
+	// Получение публичного ключа из приватного
 	pubKey := crypto.FromECDSAPub(&privKey.PublicKey)
+
+	// Преобразование публичного ключа в TRON-адрес (Base58Check с префиксом 0x41)
 	tronAddr := publicKeyToTronAddress(pubKey)
+
+	// Приватный ключ в hex-строку для хранения/отправки
 	privKeyHex := hex.EncodeToString(crypto.FromECDSA(privKey))
 
+	// Возврат: TRON-адрес и приватный ключ (hex)
 	return tronAddr, privKeyHex, nil
 }
+
 
 ```
 Trader
@@ -352,6 +329,17 @@ TRON использует bandwidth, который начисляется бе�
 Одна TRX-транзакция — ~250 байт.
 Если адрес превысил лимит bandwidth — TRON списывает TRX с баланса
 
+Проверка остатка bandwidth
+
+```go
+func CheckBandwidth(address string) (used int64, limit int64, err error) {
+	account, err := tronClient.GetAccount(address)
+	if err != nil {
+		return 0, 0, err
+	}
+	return int64(account.FreeNetUsed), int64(account.FreeNetLimit), nil
+}
+```
 
 Проверяет, есть ли достаточный баланс (TRX) для покрытия комиссий
 ```go
