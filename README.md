@@ -261,36 +261,6 @@ func GetBalance(address string) (int64, error) {
 	return account.Balance, nil
 }
 ```
-Отправить TRX (своим ключом)
-```go
-func SendTRX(fromPrivKey string, toAddr string, amount int64) (string, error) {
-	fromAddr, err := AddressFromPrivKey(fromPrivKey)
-	if err != nil {
-		return "", err
-	}
-
-	tx, err := tronClient.Transfer(fromAddr, toAddr, amount)
-	if err != nil {
-		return "", err
-	}
-
-	signedTx, err := tronClient.SignTransaction(tx, fromPrivKey)
-	if err != nil {
-		return "", err
-	}
-
-	result, err := tronClient.Broadcast(signedTx)
-	if err != nil {
-		return "", err
-	}
-
-	if !result.Result {
-		return "", fmt.Errorf("transaction failed")
-	}
-	return tx.Txid, nil
-}
-```
-
 
 Merch
 Использует адреса m/44'/195'/2'/0/i
