@@ -174,50 +174,48 @@ m/44'/195'/account'/change/address_index
 
 API методы для каждой роли: 
 ```go
-// DeriveTronAddress — возвращает TRON-адрес и приватный ключ по строковому имени роли и индексу
-// Использует BIP-44 деривацию с coin_type 195 (TRON)
-func DeriveTronAddress(wallet *hdwallet.Wallet, role string, index int) (string, string, error) {
-	var account uint32
+// Получение адреса и приватного ключа по роли и индексу
+func GetAddressForRole(wallet *hdwallet.Wallet, role string, index int) (string, string, error) {
+    var account uint32
+    switch role {
+    case "trader":
+        account = 0
+    case "admin":
+        account = 1
+    case "merch":
+        account = 2
+    default:
+        return "", "", fmt.Errorf("unknown role: %s", role)
+    }
 
-	// Определение номера аккаунта (account') по роли
-	switch role {
-	case "trader":
-		account = 0 // m/44'/195'/0'/0/i
-	case "admin":
-		account = 1 // m/44'/195'/1'/0/i
-	case "merch":
-		account = 2 // m/44'/195'/2'/0/i
-	default:
-		return "", "", fmt.Errorf("unknown role: %s", role) // Неизвестная роль
-	}
+    // Формируем путь согласно BIP-44
+    derivationPathStr := fmt.Sprintf("m/44'/195'/%d'/0/%d", account, index)
+    path := hdwallet.MustParseDerivationPath(derivationPathStr)
 
-	// Формирование пути деривации согласно BIP-44: m / purpose' / coin_type' / account' / change / address_index
-	path := fmt.Sprintf("m/44'/195'/%d'/0/%d", account, index)
+    // Деривация
+    derivedAccount, err := wallet.Derive(path, false)
+    if err != nil {
+        return "", "", err
+    }
 
-	// Парсинг строки пути в структуру hdwallet.DerivationPath
-	derivationPath := hdwallet.MustParseDerivationPath(path)
+    // Приватный ключ
+    privKey, err := wallet.PrivateKey(derivedAccount)
+    if err != nil {
+        return "", "", err
+    }
 
-	// Деривация ключа по заданному пути
-	accountWallet, err := wallet.Derive(derivationPath, false)
-	if err != nil {
-		return "", "", err
-	}
+    // Публичный ключ
+    pubKey := crypto.FromECDSAPub(&privKey.PublicKey)
 
-	// Извлечение приватного ключа (ECDSA)
-	privKey, _ := wallet.PrivateKey(accountWallet)
+    // Конвертация в TRON-адрес
+    tronAddress := publicKeyToTronAddress(pubKey)
 
-	// Получение публичного ключа из приватного
-	pubKey := crypto.FromECDSAPub(&privKey.PublicKey)
+    // Приватный ключ в hex
+    privKeyHex := hex.EncodeToString(crypto.FromECDSA(privKey))
 
-	// Преобразование публичного ключа в TRON-адрес (Base58Check с префиксом 0x41)
-	tronAddr := publicKeyToTronAddress(pubKey)
-
-	// Приватный ключ в hex-строку для хранения/отправки
-	privKeyHex := hex.EncodeToString(crypto.FromECDSA(privKey))
-
-	// Возврат: TRON-адрес и приватный ключ (hex)
-	return tronAddr, privKeyHex, nil
+    return tronAddress, privKeyHex, nil
 }
+
 
 
 ```
